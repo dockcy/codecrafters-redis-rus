@@ -12,14 +12,13 @@ fn main() {
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
 
     loop {
-            match listener.accept() {
-                Ok((stream,_)) => {
-                    handle_connection(stream);
-                    println!("accepted new connection");
-                }
-                Err(e) => {
-                    println!("error: {}", e);
-                }
+        match listener.accept() {
+            Ok((stream, _)) => {
+                handle_connection(stream);
+                println!("accepted new connection");
+            }
+            Err(e) => {
+                println!("error: {}", e);
             }
         }
     }
@@ -32,7 +31,7 @@ fn handle_connection(mut stream: TcpStream) {
     let req_string = String::from_utf8_lossy(&req_buf);
     println!("request content :{req_string}");
     let response = concat!(
-        "+PONG\r\n"
+    "+PONG\r\n"
     ).as_bytes();
     let _ = stream.write_all(response).unwrap();
     stream.flush().expect("flush error");
