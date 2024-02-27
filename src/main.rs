@@ -32,9 +32,6 @@ fn handle_connection(mut stream: TcpStream) {
     let req_string = String::from_utf8_lossy(&req_buf);
     println!("request content :{req_string}");
     let response = concat!(
-        "HTTP/1.1 200 OK\r\n",
-        "Content-Length: 5\r\n",
-        "Connection: close \r\n\r\n",
         "+PONG\r\n"
     ).as_bytes();
     let _ = stream.write(response).unwrap();
