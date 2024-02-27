@@ -15,7 +15,6 @@ fn main() {
         match stream {
             Ok(stream) => {
                 handle_connection(stream);
-
                 println!("accepted new connection");
             }
             Err(e) => {
@@ -34,7 +33,7 @@ fn handle_connection(mut stream: TcpStream) {
     let response = concat!(
         "+PONG\r\n"
     ).as_bytes();
-    let _ = stream.write(response).unwrap();
+    let _ = stream.write_all(response).unwrap();
     stream.flush().expect("flush error");
     println!("finish the response!");
 }
