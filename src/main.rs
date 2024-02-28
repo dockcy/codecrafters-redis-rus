@@ -1,5 +1,6 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::thread;
 
 // Uncomment this block to pass the first stage use std::net::{TcpListener, TcpStream};
 
@@ -15,7 +16,9 @@ fn main() {
         match stream {
             Ok(stream) => {
                 println!("Start handling a new connection");
+                thread::spawn(|| {
                 handle_connection(stream);
+                });
             }
             Err(e) => {
                 eprintln!("{e}");
@@ -34,7 +37,7 @@ fn handle_connection(mut stream: TcpStream) {
             Ok(_) => {
                 stream.write_all(b"+PONG\r\n").expect("write response error");
             }
-            Err(e) => { eprintln!("{e}") }
+            Err(e) => { eprintln!("{e}");break; }
         }
     }
 }
