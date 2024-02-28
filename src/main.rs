@@ -11,29 +11,30 @@ fn main() {
 
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
 
-    loop {
-        match listener.accept() {
-            Ok((stream, _)) => {
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                println!("Start handling a new connection");
                 handle_connection(stream);
-                println!("accepted new connection");
             }
             Err(e) => {
-                println!("error: {}", e);
+                eprintln!("{e}");
             }
         }
     }
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    // read the request
-    let mut req_buf = [0u8; 1024];
-    let _bytes_num = stream.read(&mut req_buf).unwrap();
-    let req_string = String::from_utf8_lossy(&req_buf);
-    println!("request content :{req_string}");
-    let response = concat!(
-    "+PONG\r\n"
-    ).as_bytes();
-    let _ = stream.write_all(response).unwrap();
-    stream.flush().expect("flush error");
-    println!("finish the response!");
+    loop {
+        let mut buf = [0u8; 128];
+        match stream.read(&mut buf) {
+            Ok(0) => {
+                break;
+            }
+            Ok(_) => {
+                stream.write_all(b"+PONG\r\n").expect("write response error");
+            }
+            Err(e) => { eprintln!("{e}") }
+        }
+    }
 }
