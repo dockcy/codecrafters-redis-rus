@@ -41,7 +41,7 @@ pub fn get_resp_value(input: &mut &[u8]) -> Result<RESPValue, Box<dyn Error>> {
                 }
                 Ok(RESPValue::Array(array))
             } else {
-                Ok(RESPValue::Array(vec![]))
+                Ok(RESPValue::NULL)
             }
         }
         _ => {
@@ -57,10 +57,12 @@ pub fn get_resp_value(input: &mut &[u8]) -> Result<RESPValue, Box<dyn Error>> {
 
 
 fn read_line<'a>(input: &mut &'a [u8]) -> &'a [u8] {
-    // note that the "\r\n" is ['\','r','\','n']
-    if let Some(index) = input.windows(2).position(|w| w == [b'\\', b'r']) {
+    // if let Some(index) = input.windows(2).position(|w| w == [b'\\', b'r']) {
+    //     let line = &input[..index];
+    //     *input = &input[index + 4..];
+    if let Some(index) = input.windows(2).position(|w| w == [b'\r', b'\n']) {
         let line = &input[..index];
-        *input = &input[index + 4..];
+        *input = &input[index + 2..];
         line
     } else {
         let line = *input;
