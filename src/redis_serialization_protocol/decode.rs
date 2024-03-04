@@ -3,13 +3,13 @@ use std::io;
 
 use crate::redis_serialization_protocol::RESPValue;
 
-pub fn get_resp_value(input: &mut &[u8]) -> Result<RESPValue,Box<dyn Error>> {
+pub fn get_resp_value(input: &mut &[u8]) -> Result<RESPValue, Box<dyn Error>> {
     let input_type = input.get(0).ok_or(io::Error::new(io::ErrorKind::InvalidData, "Invalid RESP input"))?.clone();
     *input = &input[1..];
     match input_type {
         b'+' => {
             let line = read_line(input);
-            return  Ok(RESPValue::SimpleString(String::from_utf8_lossy(line).to_string()))
+            return Ok(RESPValue::SimpleString(String::from_utf8_lossy(line).to_string()));
         }
         b'-' => {
             let line = read_line(input);
@@ -57,9 +57,10 @@ pub fn get_resp_value(input: &mut &[u8]) -> Result<RESPValue,Box<dyn Error>> {
 
 
 fn read_line<'a>(input: &mut &'a [u8]) -> &'a [u8] {
-    if let Some(index) = input.iter().position(|&b| b == b'\r') {
-        let line = &(input[..index]);
-        *input = &input[index + 2..];
+    // note that the "\r\n" is ['\','r','\','n']
+    if let Some(index) = input.windows(2).position(|w| w == [b'\\', b'r']) {
+        let line = &input[..index];
+        *input = &input[index + 4..];
         line
     } else {
         let line = *input;
@@ -68,6 +69,7 @@ fn read_line<'a>(input: &mut &'a [u8]) -> &'a [u8] {
         line
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,11 +122,16 @@ mod tests {
             RESPValue::Array(vec![
                 RESPValue::BulkString(b"bar".to_vec()),
                 RESPValue::BulkString(b"baz".to_vec()),
-            ])
+            ]),
         ]);
         assert_eq!(get_resp_value(&mut input).unwrap(), expected);
     }
 
-
+    #[test]
+    fn test() {
+        let v_1000 = [b'1', b'0', b'0', b'0'];
+        let v = i32::from_str_radix(&String::from_utf8_lossy(&v_1000), 10).unwrap();
+        println!("{v}");
+    }
 }
 

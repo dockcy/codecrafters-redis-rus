@@ -54,6 +54,7 @@ fn handle_connection(mut stream: TcpStream) {
                     }
                 } else {
                     println!("Not valid command: {:?}",String::from_utf8_lossy(&buf[..n]));
+                    stream.write_all(b"-ERR invalid command\r\n").expect("write response error");
                 }
             }
             Err(e) => { eprintln!("{e}");break; }
