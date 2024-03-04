@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
@@ -7,6 +6,7 @@ use redis_command_parser::*;
 use redis_serialization_protocol::*;
 
 use crate::redis_serialization_protocol::decode::get_resp_value;
+use crate::redis_serialization_protocol::encode::encode_resp_value;
 
 mod redis_serialization_protocol;
 mod redis_command_parser;
@@ -42,15 +42,17 @@ fn handle_connection(mut stream: TcpStream) {
                 println!("Get req");
                 match get_resp_value(&mut &buf[..n]) {
                     Ok(RESPValue::Array(arr)) => {
-                        match arr.get(0)  {
+                        match arr.get(0) {
                             Some(RESPValue::BulkString(cmd)) => {
                                 match redis_command_parser(String::from_utf8(cmd.to_vec()).unwrap()) {
                                     Some(Command::PING) => {
-                                        stream.write_all(b"PONG\r\n").expect("write response error");
+                                        let encode_string = encode_resp_value(RESPValue::BulkString(b"PONG".to_vec()));
+                                        stream.write_all(encode_string.as_bytes()) .expect("write response error");
                                     }
                                     Some(Command::ECHO) => {
                                         if let Some(RESPValue::BulkString(v)) = arr.get(1) {
-                                            stream.write_all(v).expect("write response error");
+                                            let encode_string = encode_resp_value(RESPValue::BulkString(v.to_vec()));
+                                            stream.write_all(encode_string.as_bytes()).expect("write response error");
                                         } else {
                                             stream.write_all(b"-ERR invalid arguments\r\n").expect("write response error");
                                         }
@@ -74,7 +76,6 @@ fn handle_connection(mut stream: TcpStream) {
                         break;
                     }
                 }
-
             }
             Err(e) => {
                 eprintln!("{e}");
