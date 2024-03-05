@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use redis_command_parser::*;
@@ -16,12 +18,14 @@ fn main() {
 
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
 
+    let map:Arc<Mutex<HashMap<String,String>>> = Arc::new(Mutex::new(HashMap::new()));
     for stream in listener.incoming() {
+        let map = map.clone();
         match stream {
             Ok(stream) => {
                 println!("Start handling a new connection");
-                thread::spawn(|| {
-                    handle_connection(stream);
+                thread::spawn(move || {
+                    handle_connection(stream,map);
                 });
             }
             Err(e) => {
@@ -31,7 +35,7 @@ fn main() {
     }
 }
 
-fn handle_connection(mut stream: TcpStream) {
+fn handle_connection(mut stream: TcpStream, map: Arc<Mutex<HashMap<String, String>>>) {
     loop {
         let mut buf = [0u8; 1024];
         match stream.read(&mut buf) {
@@ -55,6 +59,27 @@ fn handle_connection(mut stream: TcpStream) {
                                                 if let Some(v) = arr.get(1) {
                                                     let encode_string = encode_resp_value(v);
                                                     stream.write_all(encode_string.as_bytes()).expect("write response error");
+                                                } else {
+                                                    stream.write_all(b"-ERR invalid arguments\r\n").expect("write response error");
+                                                }
+                                            }
+                                            Some(Command::SET) => {
+                                                if let [RESPValue::BulkString(BulkEnumerator::Value(key)), RESPValue::BulkString(BulkEnumerator::Value(value))] = arr.get(1..=2).unwrap(){
+                                                    map.lock().unwrap().insert(String::from_utf8(key.to_vec()).unwrap(), String::from_utf8(value.to_vec()).unwrap());
+                                                    stream.write_all(b"+OK\r\n").expect("write response error");
+                                                } else {
+                                                    stream.write_all(b"-ERR invalid arguments\r\n").expect("write response error");
+                                                }
+                                            }
+                                            Some(Command::GET) => {
+                                                if let Some(RESPValue::BulkString(BulkEnumerator::Value(key))) = arr.get(1) {
+                                                    if let Some(value) = map.lock().unwrap().get(&String::from_utf8(key.to_vec()).unwrap()) {
+                                                        let encode_string = encode_resp_value(&RESPValue::BulkString(BulkEnumerator::Value(value.as_bytes().to_vec())));
+                                                        stream.write_all(encode_string.as_bytes()).expect("write response error");
+                                                    } else {
+                                                        let encode_string = encode_resp_value(&RESPValue::BulkString(BulkEnumerator::Null));
+                                                        stream.write_all(encode_string.as_bytes()).expect("write response error");
+                                                    }
                                                 } else {
                                                     stream.write_all(b"-ERR invalid arguments\r\n").expect("write response error");
                                                 }
