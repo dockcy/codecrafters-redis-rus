@@ -43,22 +43,30 @@ fn handle_connection(mut stream: TcpStream) {
                 match get_resp_value(&mut &buf[..n]) {
                     Ok(RESPValue::Array(arr)) => {
                         match arr.get(0) {
-                            Some(RESPValue::BulkString(cmd)) => {
-                                match redis_command_parser(String::from_utf8(cmd.to_vec()).unwrap()) {
-                                    Some(Command::PING) => {
-                                        let encode_string = encode_resp_value(RESPValue::BulkString(b"PONG".to_vec()));
-                                        stream.write_all(encode_string.as_bytes()) .expect("write response error");
-                                    }
-                                    Some(Command::ECHO) => {
-                                        if let Some(RESPValue::BulkString(v)) = arr.get(1) {
-                                            let encode_string = encode_resp_value(RESPValue::BulkString(v.to_vec()));
-                                            stream.write_all(encode_string.as_bytes()).expect("write response error");
-                                        } else {
-                                            stream.write_all(b"-ERR invalid arguments\r\n").expect("write response error");
+                            Some(RESPValue::BulkString(bulk_str)) => {
+                                match bulk_str {
+                                    BulkEnumerator::Value(cmd) => {
+                                        match redis_command_parser(String::from_utf8(cmd.to_vec()).unwrap()) {
+                                            Some(Command::PING) => {
+                                                let encode_string = encode_resp_value(&RESPValue::BulkString(BulkEnumerator::Value(b"PONG".to_vec())));
+                                                stream.write_all(encode_string.as_bytes()).expect("write response error");
+                                            }
+                                            Some(Command::ECHO) => {
+                                                if let Some(v) = arr.get(1) {
+                                                    let encode_string = encode_resp_value(v);
+                                                    stream.write_all(encode_string.as_bytes()).expect("write response error");
+                                                } else {
+                                                    stream.write_all(b"-ERR invalid arguments\r\n").expect("write response error");
+                                                }
+                                            }
+                                            _ => {
+                                                // other commands
+                                                unimplemented!()
+                                            }
                                         }
                                     }
                                     _ => {
-                                        unimplemented!()
+                                        stream.write_all(b"-ERR invalid command\r\n").expect("write response error");
                                     }
                                 }
                             }

@@ -7,6 +7,13 @@ pub enum RESPValue{
     SimpleString(String),
     Error(String),
     Integer(i32),
-    BulkString(Vec<u8>),
+    BulkString(BulkEnumerator),
     Array(Vec<RESPValue>)
+}
+
+#[derive(Debug,PartialEq)]
+pub enum BulkEnumerator {
+    Value(Vec<u8>),
+    Empty,
+    Null,
 }

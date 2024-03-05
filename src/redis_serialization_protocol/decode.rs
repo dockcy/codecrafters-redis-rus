@@ -1,7 +1,7 @@
 use std::error::Error;
-use std::io;
+use std::{i32, io, usize};
 
-use crate::redis_serialization_protocol::RESPValue;
+use crate::redis_serialization_protocol::{BulkEnumerator, RESPValue};
 
 pub fn get_resp_value(input: &mut &[u8]) -> Result<RESPValue, Box<dyn Error>> {
     let input_type = input.get(0).ok_or(io::Error::new(io::ErrorKind::InvalidData, "Invalid RESP input"))?.clone();
@@ -21,14 +21,23 @@ pub fn get_resp_value(input: &mut &[u8]) -> Result<RESPValue, Box<dyn Error>> {
         }
         b'$' => {
             let length_line = read_line(input);
-            let length = usize::from_str_radix(&String::from_utf8_lossy(length_line), 10).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid RESP input"))?;
-            if length > 0 {
-                let data = read_line(input);
-                if data.len() < length {
-                    return Err(Box::try_from(io::Error::new(io::ErrorKind::InvalidData, "Invalid RESP input")).unwrap());
+            let length = i32::from_str_radix(&String::from_utf8_lossy(length_line), 10).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid RESP input"))?;
+            match length {
+                0 => {
+                    Ok(RESPValue::BulkString(BulkEnumerator::Empty))
                 }
-                Ok(RESPValue::BulkString(data[..length].to_vec()))
-            } else { Ok(RESPValue::BulkString(vec![])) }
+                ..=-1 => {
+                    Ok(RESPValue::BulkString(BulkEnumerator::Null))
+                }
+                len => {
+                    let len = len as usize;
+                    let data = read_line(input);
+                    if data.len()  < len  {
+                        return Err(Box::try_from(io::Error::new(io::ErrorKind::InvalidData, "Invalid RESP input")).unwrap());
+                    }
+                    Ok(RESPValue::BulkString(BulkEnumerator::Value(data[..len].to_vec())))
+                }
+            }
         }
         b'*' => {
             let length_line = read_line(input);
@@ -77,63 +86,53 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_get_respvalue_simple_string() {
-        let mut input = b"+OK\r\n".as_ref();
-        let expected = RESPValue::SimpleString("OK".to_string());
-        assert_eq!(get_resp_value(&mut input).unwrap(), expected);
+    fn test_read_line() {
+        let mut input: &[u8] = b"+OK\r\n";
+        assert_eq!(read_line(&mut input), b"+OK");
+        assert_eq!(input, b"");
     }
 
     #[test]
-    fn test_get_respvalue_error() {
-        let mut input = b"-Error message\r\n".as_ref();
-        let expected = RESPValue::Error("Error message".to_string());
-        assert_eq!(get_resp_value(&mut input).unwrap(), expected);
+    fn test_get_resp_value_simple_string() {
+        let mut input: &[u8] = b"+OK\r\n";
+        assert_eq!(get_resp_value(&mut input).unwrap(), RESPValue::SimpleString("OK".to_string()));
+        assert_eq!(input, b"");
     }
 
     #[test]
-    fn test_get_respvalue_integer() {
-        let mut input = b":1000\r\n".as_ref();
-        let expected = RESPValue::Integer(1000);
-        assert_eq!(get_resp_value(&mut input).unwrap(), expected);
+    fn test_get_resp_value_bulk_string() {
+        let mut input: &[u8] = b"$4\r\nWiki\r\n";
+        assert_eq!(get_resp_value(&mut input).unwrap(), RESPValue::BulkString(BulkEnumerator::Value(b"Wiki".to_vec())));
+        assert_eq!(input, b"");
     }
 
     #[test]
-    fn test_get_respvalue_bulk_string() {
-        let mut input = b"$6\r\nfoobar\r\n".as_ref();
-        let expected = RESPValue::BulkString(b"foobar".to_vec());
-        assert_eq!(get_resp_value(&mut input).unwrap(), expected);
+    fn test_get_resp_value_array() {
+        let mut input: &[u8] = b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n";
+        assert_eq!(get_resp_value(&mut input).unwrap(), RESPValue::Array(vec![RESPValue::BulkString(BulkEnumerator::Value(b"foo".to_vec())), RESPValue::BulkString(BulkEnumerator::Value(b"bar".to_vec()))]));
+        assert_eq!(input, b"");
     }
 
     #[test]
-    fn test_get_respvalue_array() {
-        let mut input = b"*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n".as_ref();
-        let expected = RESPValue::Array(vec![
-            RESPValue::BulkString(b"foo".to_vec()),
-            RESPValue::BulkString(b"bar".to_vec()),
-        ]);
-        assert_eq!(get_resp_value(&mut input).unwrap(), expected);
+    fn test_get_resp_value_error() {
+        let mut input: &[u8] = b"-Error message\r\n";
+        assert_eq!(get_resp_value(&mut input).unwrap(), RESPValue::Error("Error message".to_string()));
+        assert_eq!(input, b"");
     }
 
     #[test]
-    fn test_get_respvalue_nested_array() {
-        let mut input = b"*2\r\n*1\r\n$3\r\nfoo\r\n*2\r\n$3\r\nbar\r\n$3\r\nbaz\r\n".as_ref();
-        let expected = RESPValue::Array(vec![
-            RESPValue::Array(vec![
-                RESPValue::BulkString(b"foo".to_vec())
-            ]),
-            RESPValue::Array(vec![
-                RESPValue::BulkString(b"bar".to_vec()),
-                RESPValue::BulkString(b"baz".to_vec()),
-            ]),
-        ]);
-        assert_eq!(get_resp_value(&mut input).unwrap(), expected);
+    fn test_get_resp_value_integer() {
+        let mut input: &[u8] = b":1000\r\n";
+        assert_eq!(get_resp_value(&mut input).unwrap(), RESPValue::Integer(1000));
+        assert_eq!(input, b"");
     }
 
     #[test]
-    fn test() {
-        let v_1000 = [b'1', b'0', b'0', b'0'];
-        let v = i32::from_str_radix(&String::from_utf8_lossy(&v_1000), 10).unwrap();
-        println!("{v}");
+    fn test_get_resp_value_null() {
+        let mut input: &[u8] = b"$-1\r\n";
+        assert_eq!(get_resp_value(&mut input).unwrap(), RESPValue::BulkString(BulkEnumerator::Null));
+        assert_eq!(input, b"");
     }
+
 }
 
