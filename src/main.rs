@@ -12,14 +12,26 @@ use crate::redis_serialization_protocol::decode::get_resp_value;
 use crate::redis_serialization_protocol::encode::encode_resp_value;
 use crate::schedualer::ValueProperties;
 
+
+
 mod redis_serialization_protocol;
 mod redis_command_parser;
 mod schedualer;
 
-fn main() {
-    println!("Sever starting...");
+const DEFAULT_PORT: &str = "6379";
 
-    let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
+fn main() {
+    let args = clap::Command::new("redis-server")
+       .arg(clap::Arg::new("port")
+           .short('p')
+           .long("port")
+           .default_value(DEFAULT_PORT)
+           .help("The port to listen on"))
+       .get_matches();
+
+    let port = args.get_one::<String>("port").unwrap();
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", &port)).unwrap();
+    println!("Sever starting on {}...",&port);
 
     let map:Arc<Mutex<HashMap<String,ValueProperties>>> = Arc::new(Mutex::new(HashMap::new()));
     for stream in listener.incoming() {
