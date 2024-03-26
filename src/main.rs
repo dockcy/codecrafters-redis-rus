@@ -66,11 +66,11 @@ fn handle_connection(mut stream: TcpStream, map: Arc<Mutex<HashMap<String, Value
                                 match bulk_str {
                                     BulkEnumerator::Value(cmd) => {
                                         match redis_command_parser(String::from_utf8(cmd.to_vec()).unwrap()) {
-                                            Some(Command::PING) => {
+                                            Some(RedisCommand::PING) => {
                                                 let encode_string = encode_resp_value(&RESPValue::BulkString(BulkEnumerator::Value(b"PONG".to_vec())));
                                                 stream.write_all(encode_string.as_bytes()).expect("write response error");
                                             }
-                                            Some(Command::ECHO) => {
+                                            Some(RedisCommand::ECHO) => {
                                                 if let Some(v) = arr.get(1) {
                                                     let encode_string = encode_resp_value(v);
                                                     stream.write_all(encode_string.as_bytes()).expect("write response error");
@@ -78,7 +78,7 @@ fn handle_connection(mut stream: TcpStream, map: Arc<Mutex<HashMap<String, Value
                                                     stream.write_all(b"-ERR invalid arguments\r\n").expect("write response error");
                                                 }
                                             }
-                                            Some(Command::SET) => {
+                                            Some(RedisCommand::SET) => {
                                                 match arr.as_slice() {
                                                     [_,RESPValue::BulkString(BulkEnumerator::Value(key)),RESPValue::BulkString(BulkEnumerator::Value(value))] => {
                                                         let value = ValueProperties::new(String::from_utf8(value.to_vec()).unwrap(), Instant::now(), None);
@@ -95,7 +95,7 @@ fn handle_connection(mut stream: TcpStream, map: Arc<Mutex<HashMap<String, Value
                                                     }
                                                 }
                                             }
-                                            Some(Command::GET) => {
+                                            Some(RedisCommand::GET) => {
                                                 if let Some(RESPValue::BulkString(BulkEnumerator::Value(key))) = arr.get(1) {
                                                     if let Some(value) = map.lock().unwrap().get(&String::from_utf8(key.to_vec()).unwrap()) {
                                                         if value.is_expired() {
@@ -112,6 +112,10 @@ fn handle_connection(mut stream: TcpStream, map: Arc<Mutex<HashMap<String, Value
                                                 } else {
                                                     stream.write_all(b"-ERR invalid arguments\r\n").expect("write response error");
                                                 }
+                                            }
+                                            Some(RedisCommand::INFO) => {
+                                                let string = encode_resp_value(&RESPValue::BulkString(BulkEnumerator::Value(b"role:master\r\n".to_vec())));
+                                                stream.write_all(string.as_bytes()).expect("write response error");
                                             }
                                             _ => {
                                                 // other commands
