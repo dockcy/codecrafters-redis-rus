@@ -28,6 +28,7 @@ pub fn redis_command_parser(command: String) -> Option<RedisCommand> {
         "set" => Some(RedisCommand::SET),
         "get" => Some(RedisCommand::GET),
         "echo" => Some(RedisCommand::ECHO),
+        "info" => Some(RedisCommand::INFO),
         _ => {
             None
         }
